@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pole Check — live</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --surface-2:#e3e8ed; --inset:#f7f9fa;
+  --line:#ccd5dc; --line-strong:#aab8c2;
+  --fg:#141e27; --fg-dim:#4d5f6c; --fg-faint:#7d8d99;
+  --accent:#0a6a9e;
+  --pole-n:#c0271f; --pole-s:#17753a; --warn:#9a5c00; --ok:#17753a;
+  --f-display:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f141a; --surface:#161e26; --surface-2:#1e2831; --inset:#121920;
+  --line:#2a353f; --line-strong:#3b4854;
+  --fg:#dde6ec; --fg-dim:#91a1ad; --fg-faint:#6c7d8a;
+  --accent:#48aede;
+  --pole-n:#ff6f63; --pole-s:#45d183; --warn:#d6a243; --ok:#45d183;
+  color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5;
+  padding-left:max(14px,env(safe-area-inset-left,0px));
+  padding-right:max(14px,env(safe-area-inset-right,0px));
+  padding-block:max(12px,env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-bottom,0px));
+  overscroll-behavior:none}
+.wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+
+h1{font-family:var(--f-display);font-size:19px;font-weight:700;margin:0;letter-spacing:.01em}
+.hrow{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.unit{font-family:var(--f-data);font-size:10.5px;color:var(--fg-faint);letter-spacing:.05em}
+
+.stage{position:relative;background:#000;border:1px solid var(--line);border-radius:3px;overflow:hidden;
+  aspect-ratio:4/3;max-width:100%}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+#ov{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;top:8px;left:8px;right:8px;display:flex;justify-content:space-between;
+  pointer-events:none;gap:8px}
+.pill{font-family:var(--f-data);font-size:10.5px;color:#fff;background:rgba(0,0,0,.55);
+  padding:3px 7px;border-radius:99px}
+.pill.warn{background:#b86a00}
+.idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:#8a99a5;font-size:13px;text-align:center;padding:24px}
+
+.readout{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);
+  border-radius:3px;padding:12px 14px}
+.big{font-family:var(--f-display);font-size:46px;font-weight:700;line-height:1;width:54px;text-align:center}
+.big.n{color:var(--pole-n)} .big.s{color:var(--pole-s)} .big.off{color:var(--fg-faint)}
+.count{font-family:var(--f-data);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums}
+.sub{font-size:11.5px;color:var(--fg-faint)}
+.right{margin-left:auto;text-align:right;font-family:var(--f-data);font-size:11.5px;color:var(--fg-dim);
+  font-variant-numeric:tabular-nums}
+
+#strip{display:block;width:100%;height:28px;background:var(--surface);border:1px solid var(--line);
+  border-radius:3px}
+
+.banner{border:1px solid var(--line);border-left-width:4px;border-radius:3px;background:var(--surface);
+  padding:10px 12px;font-size:13px;color:var(--fg-dim)}
+.banner.pass{border-left-color:var(--ok);color:var(--ok)}
+.banner.fail{border-left-color:var(--pole-n);color:var(--pole-n)}
+.banner.warn{border-left-color:var(--warn);color:var(--warn)}
+.banner.run{border-left-color:var(--accent);color:var(--accent)}
+
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{font-family:var(--f-display);font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  background:var(--surface-2);color:var(--fg);border:1px solid var(--line-strong);border-radius:3px;
+  padding:11px 15px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;flex:1}
+button.stop{background:var(--pole-n);border-color:var(--pole-n);color:#fff}
+button:disabled{opacity:.45}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+details{background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:12px 14px}
+summary{cursor:pointer;font-family:var(--f-display);font-size:11px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--fg-dim)}
+details[open] summary{margin-bottom:12px}
+label{display:block;font-family:var(--f-display);font-size:10.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--fg-dim);margin-bottom:4px}
+.val{float:right;font-family:var(--f-data);font-size:11px;color:var(--fg-faint);text-transform:none;letter-spacing:0}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=number]{font-family:var(--f-data);font-size:16px;background:var(--inset);color:var(--fg);
+  border:1px solid var(--line-strong);border-radius:3px;padding:8px;width:100%}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.note{font-size:11.5px;color:var(--fg-faint);margin:10px 0 0}
+
+.ledger{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-family:var(--f-data);font-size:12.5px;
+  font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;background:var(--surface-2);font-family:var(--f-display);font-size:10px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--fg-dim);text-align:left;padding:7px 9px;
+  border-bottom:1px solid var(--line-strong)}
+td{padding:6px 9px;border-bottom:1px solid var(--line)}
+tr.bad{background:rgba(192,39,31,.12)}
+.n{color:var(--pole-n);font-weight:600} .s{color:var(--pole-s);font-weight:600}
+a.dl{font-family:var(--f-display);font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hrow">
+  <h1>Pole Check</h1>
+  <span class="unit" id="fps">WT-60 · N red · S green</span>
+</div>
+
+<div class="stage">
+  <video id="vid" playsinline muted autoplay></video>
+  <canvas id="ov"></canvas>
+  <div class="hud">
+    <span class="pill" id="pFps">—</span>
+    <span class="pill" id="pClip">—</span>
+  </div>
+  <div class="idle" id="idle">Camera off.<br>Tap Start camera below.</div>
+</div>
+
+<div class="readout">
+  <div class="big off" id="live">–</div>
+  <div>
+    <div class="count"><span id="n">0</span> / <span id="exp">32</span></div>
+    <div class="sub">pulses counted</div>
+  </div>
+  <div class="right">
+    <div>N <span id="nN">0</span> &nbsp; S <span id="nS">0</span></div>
+    <div id="dt">Δt —</div>
+  </div>
+</div>
+
+<canvas id="strip"></canvas>
+
+<div class="banner" id="banner">Start the camera, aim the box at the pen LEDs, then arm the count.</div>
+
+<div class="row">
+  <button class="primary" id="cam">Start camera</button>
+  <button id="arm" disabled>Arm</button>
+  <button id="reset">Reset</button>
+</div>
+
+<details>
+  <summary>Setup</summary>
+  <div class="grid">
+    <div>
+      <label for="expected">Magnets on rotor</label>
+      <input type="number" id="expected" min="2" max="200" step="2" value="32">
+    </div>
+    <div>
+      <label for="box">ROI size <span class="val" id="boxV">30%</span></label>
+      <input type="range" id="box" min="8" max="80" step="1" value="30">
+    </div>
+  </div>
+  <p class="note">Drag the box on the preview to move it. Keep the LEDs small in frame and leave something
+    bright in shot — iOS gives no manual exposure control to a web page, so whole-frame metering is the only
+    lever you have over clipping. Watch the clip figure: above about 1% the LED core is white in all three
+    channels and only its bloom is classifiable.</p>
+</details>
+
+<details>
+  <summary>Detector</summary>
+  <div class="grid">
+    <div><label for="thresh">Threshold <span class="val" id="threshV">6.0</span></label>
+      <input type="range" id="thresh" min="0" max="60" step="0.5" value="6"></div>
+    <div><label for="ratio">Dominance <span class="val" id="ratioV">1.60×</span></label>
+      <input type="range" id="ratio" min="1" max="4" step="0.05" value="1.6"></div>
+    <div><label for="deb">Hysteresis <span class="val" id="debV">50 ms</span></label>
+      <input type="range" id="deb" min="0" max="300" step="10" value="50"></div>
+    <div><label for="lock">Lockout <span class="val" id="lockV">120 ms</span></label>
+      <input type="range" id="lock" min="0" max="800" step="20" value="120"></div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <label style="margin:0"><input type="checkbox" id="snd" checked> Click on each pulse</label>
+  </div>
+  <p class="note">Scores are the mean per-pixel excess of one channel over the brighter of the other two,
+    across the ROI. A clipped pixel contributes nothing to either, by construction.</p>
+</details>
+
+<details open>
+  <summary>Pulse ledger <a class="dl" id="dl" href="#" download="pole-sequence.csv" style="float:right">Export CSV</a></summary>
+  <div class="ledger">
+    <table><thead><tr><th>#</th><th>t</th><th>Pole</th><th>Δt</th><th>Note</th></tr></thead>
+    <tbody id="tb"><tr><td colspan="5" style="color:var(--fg-faint)">No pulses yet.</td></tr></tbody></table>
+  </div>
+</details>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+var $=function(i){return document.getElementById(i)};
+var vid=$("vid"),ov=$("ov"),octx=ov.getContext("2d");
+var work=document.createElement("canvas"),wctx=work.getContext("2d",{willReadFrequently:true});
+
+var P={thresh:6,ratio:1.6,deb:.05,lock:.12};
+var roi={x:.35,y:.35,w:.30,h:.30};
+var armed=false,stream=null,events=[],lastPole=0,lastEnd=0;
+var cand=0,candStart=0,committed=0,live=0;
+var t0=0,frames=0,fps=0,lastFrameT=0,clip=0,announced=false,wakeLock=null;
+
+/* ---- audio: WebAudio survives on iOS once started from a tap ---- */
+var ac=null;
+function beep(freq,ms){
+  if(!$("snd").checked) return;
+  try{
+    if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+    var o=ac.createOscillator(),g=ac.createGain();
+    o.type="square";o.frequency.value=freq;
+    g.gain.setValueAtTime(.0001,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.22,ac.currentTime+.005);
+    g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+ms/1000);
+    o.connect(g);g.connect(ac.destination);
+    o.start();o.stop(ac.currentTime+ms/1000+.02);
+  }catch(e){}
+  if(navigator.vibrate) navigator.vibrate(freq>900?12:30);
+}
+
+/* ---- detector (identical logic to the recorded-sweep analyser) ---- */
+function ingest(t,r,g){
+  var s=0;
+  if(Math.max(r,g)>=P.thresh){
+    if(r>=g*P.ratio) s=1; else if(g>=r*P.ratio) s=-1;
+  }
+  live=s;
+  if(s!==cand){cand=s;candStart=t;}
+  var out=null;
+  if(committed!==cand&&(t-candStart)>=P.deb){
+    committed=cand;
+    if(committed!==0&&armed){
+      if(lastPole===0||lastPole!==committed) out=push(committed,t,false);
+      else if((t-lastEnd)>=P.lock) out=push(committed,t,true);
+    }
+  }
+  if(committed!==0&&lastPole===committed) lastEnd=t;
+  return out;
+}
+function push(pol,t,fault){
+  var gap=events.length?t-events[events.length-1].t:null;
+  var e={i:events.length+1,pol:pol,t:t,gap:gap,fault:fault};
+  events.push(e);lastPole=pol;lastEnd=t;
+  return e;
+}
+function resetDetector(){
+  events=[];lastPole=0;lastEnd=0;cand=0;candStart=0;committed=0;announced=false;
+}
+
+/* ---- scoring ---- */
+function score(){
+  var vw=vid.videoWidth,vh=vid.videoHeight;
+  if(!vw) return null;
+  var sx=Math.round(roi.x*vw),sy=Math.round(roi.y*vh);
+  var sw=Math.max(2,Math.round(roi.w*vw)),sh=Math.max(2,Math.round(roi.h*vh));
+  sw=Math.min(sw,vw-sx);sh=Math.min(sh,vh-sy);
+  if(sw<2||sh<2) return null;
+  var W=Math.min(96,sw),H=Math.max(2,Math.round(W*sh/sw));
+  work.width=W;work.height=H;
+  wctx.drawImage(vid,sx,sy,sw,sh,0,0,W,H);
+  var d;try{d=wctx.getImageData(0,0,W,H).data;}catch(e){return null;}
+  var rs=0,gs=0,cl=0,n=W*H;
+  for(var i=0;i<d.length;i+=4){
+    var R=d[i],G=d[i+1],B=d[i+2];
+    var a=R-(G>B?G:B); if(a>0) rs+=a;
+    var b=G-(R>B?R:B); if(b>0) gs+=b;
+    if(R>=250&&G>=250&&B>=250) cl++;
+  }
+  return {r:rs/n,g:gs/n,clip:cl/n};
+}
+
+/* ---- loop ---- */
+function loop(now){
+  if(!stream) return;
+  var t=now/1000;
+  var s=score();
+  if(s){
+    clip=clip*.85+s.clip*.15;
+    var e=ingest(t,s.r,s.g);
+    if(e){
+      beep(e.fault?440:(e.pol===1?1200:760),e.fault?220:55);
+      render();
+    }
+  }
+  frames++;
+  if(t-lastFrameT>.5){fps=frames/(t-lastFrameT);frames=0;lastFrameT=t;paintHud();}
+  drawOverlay();
+  requestAnimationFrame(loop);
+}
+
+function paintHud(){
+  $("pFps").textContent=Math.round(fps)+" fps";
+  var c=$("pClip");
+  c.textContent="clip "+(clip*100).toFixed(1)+"%";
+  c.className="pill"+(clip>.01?" warn":"");
+  var L=$("live");
+  L.textContent=live===1?"N":(live===-1?"S":"–");
+  L.className="big "+(live===1?"n":(live===-1?"s":"off"));
+}
+
+function drawOverlay(){
+  var r=ov.getBoundingClientRect();
+  if(ov.width!==Math.round(r.width)||ov.height!==Math.round(r.height)){
+    ov.width=Math.round(r.width);ov.height=Math.round(r.height);
+  }
+  var W=ov.width,H=ov.height;
+  octx.clearRect(0,0,W,H);
+  // video is object-fit:contain — mirror that letterboxing so the box is honest
+  var vw=vid.videoWidth||4,vh=vid.videoHeight||3;
+  var sc=Math.min(W/vw,H/vh),dw=vw*sc,dh=vh*sc,ox=(W-dw)/2,oy=(H-dh)/2;
+  var bx=ox+roi.x*dw,by=oy+roi.y*dh,bw=roi.w*dw,bh=roi.h*dh;
+  octx.fillStyle="rgba(0,0,0,.4)";
+  octx.fillRect(0,0,W,by);octx.fillRect(0,by+bh,W,H-by-bh);
+  octx.fillRect(0,by,bx,bh);octx.fillRect(bx+bw,by,W-bx-bw,bh);
+  var col=live===1?getComputedStyle(document.documentElement).getPropertyValue("--pole-n")
+        :live===-1?getComputedStyle(document.documentElement).getPropertyValue("--pole-s")
+        :"rgba(255,255,255,.75)";
+  octx.strokeStyle=col.trim();octx.lineWidth=2;
+  octx.strokeRect(bx,by,bw,bh);
+}
+
+/* ---- results ---- */
+function median(a){if(!a.length)return 0;var b=a.slice().sort(function(x,y){return x-y});
+  var h=b.length>>1;return b.length%2?b[h]:(b[h-1]+b[h])/2}
+
+function render(){
+  var exp=parseInt($("expected").value,10)||0;
+  $("n").textContent=events.length;$("exp").textContent=exp;
+  $("nN").textContent=events.filter(function(e){return e.pol===1}).length;
+  $("nS").textContent=events.filter(function(e){return e.pol===-1}).length;
+  var med=median(events.slice(1).map(function(e){return e.gap*1000}));
+  $("dt").textContent=med?("Δt "+Math.round(med)+" ms"):"Δt —";
+
+  var faults=events.filter(function(e){return e.fault}).length;
+  var b=$("banner"),cls="",txt="";
+  if(!stream){cls="";txt="Start the camera, aim the box at the pen LEDs, then arm the count.";}
+  else if(!armed&&!events.length){cls="";txt="Camera running. Hold the pen on a magnet, check the box turns red or green, then Arm.";}
+  else if(faults){cls="fail";txt=faults+" pulse"+(faults>1?"s":"")+" repeated the previous pole. A backwards magnet reads as three of the same in a row — two faults. A single fault is more often the pen lifting and returning to the same magnet.";}
+  else if(!events.length){cls="run";txt="Armed. Sweep the pen around the rotor.";}
+  else if(exp&&exp%2!==0){cls="warn";txt="An alternating ring must have an even magnet count. "+exp+" is not possible.";}
+  else if(exp&&events.length===exp){cls="pass";txt="Sequence confirmed — all "+exp+" poles alternate. That is "+(exp/2)+" pole pairs.";}
+  else if(exp&&events.length===exp+1&&events[0].pol===events[events.length-1].pol){
+    cls="pass";txt="Sequence confirmed — "+exp+" alternating poles plus a wrap onto the starting magnet. "+(exp/2)+" pole pairs.";}
+  else if(exp&&events.length>exp){cls="warn";txt=events.length+" pulses exceeds "+exp+". Likely an overlap at the start, or one magnet re-triggering — raise the lockout.";}
+  else{cls="run";txt="Sweeping — "+events.length+" of "+exp+".";}
+  b.className="banner "+cls;b.textContent=txt;
+
+  if(!announced&&exp&&events.length>=exp){announced=true;
+    beep(faults?330:1600,faults?400:160);}
+
+  var rows=events.slice().reverse().slice(0,120).map(function(e){
+    return '<tr class="'+(e.fault?"bad":"")+'"><td>'+e.i+'</td><td>'+(e.t-t0).toFixed(2)+'</td>'+
+      '<td class="'+(e.pol===1?"n":"s")+'">'+(e.pol===1?"N":"S")+'</td>'+
+      '<td>'+(e.gap===null?"—":Math.round(e.gap*1000))+'</td>'+
+      '<td>'+(e.fault?"same pole":"")+'</td></tr>';
+  }).join("");
+  $("tb").innerHTML=rows||'<tr><td colspan="5" style="color:var(--fg-faint)">No pulses yet.</td></tr>';
+
+  drawStrip();
+  var csv=["index,time_s,pole,delta_ms,fault"].concat(events.map(function(e){
+    return [e.i,(e.t-t0).toFixed(3),e.pol===1?"N":"S",e.gap===null?"":Math.round(e.gap*1000),e.fault].join(",");
+  })).join("\n");
+  $("dl").href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+}
+
+function drawStrip(){
+  var c=$("strip"),dpr=window.devicePixelRatio||1,w=c.clientWidth||300,h=28;
+  c.width=w*dpr;c.height=h*dpr;
+  var g=c.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+  var cs=getComputedStyle(document.documentElement);
+  var shown=events.slice(-48),n=shown.length;
+  if(!n) return;
+  var bw=Math.max(2,Math.min(12,(w-8)/n-2));
+  shown.forEach(function(e,i){
+    g.fillStyle=e.fault?cs.getPropertyValue("--warn").trim()
+      :(e.pol===1?cs.getPropertyValue("--pole-n").trim():cs.getPropertyValue("--pole-s").trim());
+    var x=4+i*(bw+2);
+    g.fillRect(x,6,bw,h-12);
+    if(e.fault){g.strokeStyle=cs.getPropertyValue("--fg").trim();g.lineWidth=1;g.strokeRect(x-.5,5.5,bw+1,h-11);}
+  });
+}
+
+/* ---- camera ---- */
+async function startCam(){
+  if(stream){stopCam();return;}
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:"environment"},
+             width:{ideal:1280},height:{ideal:720},frameRate:{ideal:60}},
+      audio:false});
+  }catch(err){
+    $("banner").className="banner fail";
+    $("banner").textContent="Camera refused: "+(err&&err.name||"unknown")+
+      ". This page must be served over HTTPS (or localhost), and the browser needs camera permission.";
+    return;
+  }
+  vid.srcObject=stream;
+  await vid.play().catch(function(){});
+  $("idle").style.display="none";
+  $("cam").textContent="Stop camera";$("cam").classList.add("stop");
+  $("arm").disabled=false;
+  try{ if(navigator.wakeLock) wakeLock=await navigator.wakeLock.request("screen"); }catch(e){}
+  beep(900,30);
+  lastFrameT=performance.now()/1000;
+  requestAnimationFrame(loop);
+  render();
+}
+function stopCam(){
+  if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null;}
+  vid.srcObject=null;
+  $("idle").style.display="flex";
+  $("cam").textContent="Start camera";$("cam").classList.remove("stop");
+  $("arm").disabled=true;armed=false;$("arm").textContent="Arm";
+  if(wakeLock){wakeLock.release().catch(function(){});wakeLock=null;}
+  render();
+}
+
+/* ---- wiring ---- */
+$("cam").addEventListener("click",startCam);
+$("arm").addEventListener("click",function(){
+  armed=!armed;
+  if(armed){resetDetector();t0=performance.now()/1000;this.textContent="Disarm";this.classList.add("stop");}
+  else{this.textContent="Arm";this.classList.remove("stop");}
+  render();
+});
+$("reset").addEventListener("click",function(){resetDetector();render()});
+
+function bindSlider(id,vid_,fmt,apply){
+  var el=$(id);
+  var up=function(){$(vid_).textContent=fmt(+el.value);apply(+el.value);render();};
+  el.addEventListener("input",up);up();
+}
+bindSlider("thresh","threshV",function(v){return v.toFixed(1)},function(v){P.thresh=v});
+bindSlider("ratio","ratioV",function(v){return v.toFixed(2)+"×"},function(v){P.ratio=v});
+bindSlider("deb","debV",function(v){return v+" ms"},function(v){P.deb=v/1000});
+bindSlider("lock","lockV",function(v){return v+" ms"},function(v){P.lock=v/1000});
+bindSlider("box","boxV",function(v){return v+"%"},function(v){
+  var s=v/100,cx=roi.x+roi.w/2,cy=roi.y+roi.h/2;
+  roi.w=s;roi.h=s;
+  roi.x=Math.min(1-s,Math.max(0,cx-s/2));roi.y=Math.min(1-s,Math.max(0,cy-s/2));
+});
+$("expected").addEventListener("input",render);
+
+/* drag the ROI */
+(function(){
+  var dragging=false;
+  var place=function(ev){
+    var r=ov.getBoundingClientRect();
+    var vw=vid.videoWidth||4,vh=vid.videoHeight||3;
+    var sc=Math.min(r.width/vw,r.height/vh),dw=vw*sc,dh=vh*sc;
+    var ox=(r.width-dw)/2,oy=(r.height-dh)/2;
+    var px=(ev.clientX-r.left-ox)/dw,py=(ev.clientY-r.top-oy)/dh;
+    roi.x=Math.min(1-roi.w,Math.max(0,px-roi.w/2));
+    roi.y=Math.min(1-roi.h,Math.max(0,py-roi.h/2));
+  };
+  ov.addEventListener("pointerdown",function(e){dragging=true;ov.setPointerCapture(e.pointerId);place(e);e.preventDefault()});
+  ov.addEventListener("pointermove",function(e){if(dragging)place(e)});
+  ov.addEventListener("pointerup",function(){dragging=false});
+  ov.addEventListener("pointercancel",function(){dragging=false});
+})();
+
+document.addEventListener("visibilitychange",async function(){
+  if(document.visibilityState==="visible"&&stream&&!wakeLock){
+    try{ if(navigator.wakeLock) wakeLock=await navigator.wakeLock.request("screen"); }catch(e){}
+  }
+});
+window.addEventListener("resize",function(){drawStrip();drawOverlay()});
+
+render();
+})();
+</script>
+</body>
+</html>
